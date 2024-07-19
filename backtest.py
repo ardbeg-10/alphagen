@@ -1,8 +1,9 @@
-from typing import Optional, TypeVar, Callable, Optional
+from typing import Optional, TypeVar, Callable, Optional, Tuple
 import os
 import pickle
 import warnings
 import pandas as pd
+from pandas import DataFrame
 from qlib.backtest import backtest, executor as exec
 from qlib.contrib.evaluate import risk_analysis
 from qlib.contrib.report.analysis_position import report_graph
@@ -12,6 +13,7 @@ from alphagen_qlib.stock_data import StockData
 from alphagen_generic.features import *
 from alphagen_qlib.strategy import TopKSwapNStrategy
 
+import json
 
 _T = TypeVar("_T")
 
@@ -70,7 +72,7 @@ class QlibBacktest:
     def run(
         self,
         prediction: pd.Series,
-        output_prefix: Optional[str] = None,
+        output_prefix: Optional[str] = '/backtest',
         return_report: bool = False
     ) -> BacktestResult:
         prediction = prediction.sort_index()
@@ -116,10 +118,12 @@ class QlibBacktest:
         report, _ = portfolio_metric["1day"]    # type: ignore
         result = self._analyze_report(report)
         graph = report_graph(report, show_notebook=False)[0]
+
         if output_prefix is not None:
-            dump_pickle(output_prefix + "-report.pkl", lambda: report, True)
-            dump_pickle(output_prefix + "-graph.pkl", lambda: graph, True)
-            write_all_text(output_prefix + "-result.json", result)
+            dump_pickle(output_prefix + "/report.pkl", lambda: report, True)
+            dump_pickle(output_prefix + "/graph.pkl", lambda: graph, True)
+            result_json = json.dumps(result, indent=4)
+            write_all_text(output_prefix + "/result.json", result_json)
 
         print(report)
         print(result)
@@ -141,14 +145,25 @@ class QlibBacktest:
             excess_max_drawdown=loc(excess, "max_drawdown"),
         )
 
+from alphagen_qlib.utils import load_alpha_pool_by_path
+from alphagen_qlib.calculator import QLibStockDataCalculator
+
+POOL_PATH = '/save/new_csi300_200_1_20240719010851/20480_steps_pool.json'
 
 if __name__ == "__main__":
     qlib_backtest = QlibBacktest()
 
     data = StockData(instrument='csi300',
-                     start_time='2020-01-01',
-                     end_time='2021-12-31')
-    expr = Mul(EMA(Sub(Delta(Mul(Log(open_),Constant(-30.0)),50),Constant(-0.01)),40),Mul(Div(Abs(EMA(low,50)),close),Constant(0.01)))
-    data_df = data.make_dataframe(expr.evaluate(data))
+                     start_time='2023-01-01',
+                     end_time='2024-06-01')
 
-    qlib_backtest.run(data_df)
+    calculator = QLibStockDataCalculator(data=data, target=None)
+    exprs, weights = load_alpha_pool_by_path(POOL_PATH)
+
+    ensemble_alpha = calculator.make_ensemble_alpha(exprs, weights)
+    df = data.make_dataframe(ensemble_alpha)
+
+    qlib_backtest.run(df)
+
+
+# set RUST_BACKTRACE=1

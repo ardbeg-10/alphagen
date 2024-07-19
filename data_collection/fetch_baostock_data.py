@@ -234,7 +234,7 @@ class DataManager:
 
     def _fix_constituents(self) -> None:
         today = str(datetime.date.today())
-        path = f"{self._qlib_export_path}/instruments1"
+        path = f"{self._qlib_export_path}/instruments"
 
         for p in Path(path).iterdir():
             if p.stem == "all":

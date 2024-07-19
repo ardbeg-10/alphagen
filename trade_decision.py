@@ -8,11 +8,11 @@ from alphagen_qlib.strategy import TopKSwapNStrategy
 from alphagen_qlib.utils import load_alpha_pool_by_path, load_recent_data
 
 
-POOL_PATH = '/DATA/xuehy/logs/kdd_csi300_20_4_20230410071036/301056_steps_pool.json'
+POOL_PATH = '/save/new_csi300_200_1_20240718211457/20480_steps_pool.json'
 
 
 if __name__ == '__main__':
-    data, latest_date = load_recent_data(instrument='csi300', window_size=365, offset=1)
+    data, latest_date = load_recent_data(instrument='csi300', window_size=365, offset=20)
     calculator = QLibStockDataCalculator(data=data, target=None)
     exprs, weights = load_alpha_pool_by_path(POOL_PATH)
 
