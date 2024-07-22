@@ -12,7 +12,7 @@ from alphagen.data.calculator import AlphaCalculator
 from alphagen.data.expression import *
 from alphagen.models.alpha_pool import AlphaPool, AlphaPoolBase
 from alphagen.rl.env.wrapper import AlphaEnv
-from alphagen.rl.policy import LSTMSharedNet
+from alphagen.rl.policy import LSTMSharedNet, TransformerSharedNet
 from alphagen.utils.random import reseed_everything
 from alphagen.rl.env.core import AlphaEnvCore
 from alphagen_qlib.calculator import QLibStockDataCalculator
@@ -118,7 +118,7 @@ def main(
     pool = AlphaPool(
         capacity=pool_capacity,
         calculator=calculator_train,
-        ic_lower_bound=0.5,
+        ic_lower_bound=None,
         l1_alpha=5e-3
     )
     env = AlphaEnv(pool=pool, device=device, print_expr=True)
@@ -141,12 +141,14 @@ def main(
         'MlpPolicy',
         env,
         policy_kwargs=dict(
-            features_extractor_class=LSTMSharedNet,
+            features_extractor_class=TransformerSharedNet,
             features_extractor_kwargs=dict(
-                n_layers=2,
-                d_model=128,
+                n_encoder_layers=8,
+                d_model=256,
+                n_head=8,
+                d_ffn=512,
                 dropout=0.1,
-                device=device,
+                device=torch.device,
             ),
         ),
         gamma=1.,

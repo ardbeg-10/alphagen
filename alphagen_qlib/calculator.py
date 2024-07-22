@@ -20,8 +20,16 @@ class QLibStockDataCalculator(AlphaCalculator):
     def _calc_alpha(self, expr: Expression) -> Tensor:
         return normalize_by_day(expr.evaluate(self.data))
 
+    def _calc_ICs(self, value1: Tensor, value2: Tensor) -> Tensor:
+        return batch_pearsonr(value1, value2)
+
     def _calc_IC(self, value1: Tensor, value2: Tensor) -> float:
-        return batch_pearsonr(value1, value2).mean().item()
+        ICs = self._calc_ICs(value1, value2)
+        IC_mean = ICs.mean().item()
+        IC_std = ICs.std().item()
+        epsilon = 1e-10  # 防止除以零的小值
+        IR = IC_mean / (IC_std - epsilon)
+        return IR
 
     def _calc_rIC(self, value1: Tensor, value2: Tensor) -> float:
         return batch_spearmanr(value1, value2).mean().item()
