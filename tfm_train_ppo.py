@@ -148,7 +148,7 @@ def main(
                 n_head=8,
                 d_ffn=512,
                 dropout=0.1,
-                device=torch.device,
+                device=device,
             ),
         ),
         gamma=1.,

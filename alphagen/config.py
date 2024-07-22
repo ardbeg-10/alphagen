@@ -1,7 +1,7 @@
 from alphagen.data.expression import *
 
 
-MAX_EXPR_LENGTH = 20
+MAX_EXPR_LENGTH = 50
 MAX_EPISODE_LENGTH = 256
 
 OPERATORS = [

@@ -87,7 +87,8 @@ class AlphaPool(AlphaPoolBase):
             self._pop()
 
         new_ic_ret = self.evaluate_ensemble()
-        increment = new_ic_ret - self.best_ic_ret
+        ### todo
+        increment = np.exp((new_ic_ret - self.best_ic_ret) * 10) -1
         if increment > 0:
             self.best_ic_ret = new_ic_ret
         self.eval_cnt += 1
