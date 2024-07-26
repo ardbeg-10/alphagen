@@ -80,11 +80,23 @@ class QLibStockDataCalculator(AlphaCalculator):
         return self.unstack(val)
 
     def train_lgbm(self, exprs: List[Expression]) -> LGBMRegressor:
-        model = LGBMRegressor()
         X = torch.stack([self._calc_alpha(expr) for expr in exprs], dim=-1).cpu().numpy()
         X = X.reshape(-1, X.shape[-1])
         y = column_or_1d(self.target_value.cpu().numpy().reshape(-1, 1))
-        model.fit(X, y)
+
+        model = LGBMRegressor(
+            boosting_type='gbdt',
+            num_leaves=31,
+            learning_rate=0.05,
+            n_estimators=100
+        )
+
+        model.fit(
+            X=X,
+            y=y,
+            eval_metric='rmse',
+
+        )
         return model
 
     def unstack(self, value: np.ndarray) -> np.ndarray:
