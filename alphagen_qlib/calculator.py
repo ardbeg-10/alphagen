@@ -1,4 +1,7 @@
 from typing import List, Optional, Tuple
+
+import numpy as np
+from sklearn.utils import column_or_1d
 from torch import Tensor
 import torch
 from alphagen.data.calculator import AlphaCalculator
@@ -6,6 +9,7 @@ from alphagen.data.expression import Expression
 from alphagen.utils.correlation import batch_pearsonr, batch_spearmanr
 from alphagen.utils.pytorch_utils import normalize_by_day
 from alphagen_qlib.stock_data import StockData
+from lightgbm import LGBMRegressor
 
 
 class QLibStockDataCalculator(AlphaCalculator):
@@ -34,10 +38,9 @@ class QLibStockDataCalculator(AlphaCalculator):
     def _calc_rIC(self, value1: Tensor, value2: Tensor) -> float:
         return batch_spearmanr(value1, value2).mean().item()
 
-    def make_ensemble_alpha(self, exprs: List[Expression], weights: List[float]) -> Tensor:
+    def make_ensemble_alpha(self, exprs: List[Expression], model: LGBMRegressor) -> Tensor:
         n = len(exprs)
-        factors: List[Tensor] = [self._calc_alpha(exprs[i]) * weights[i] for i in range(n)]
-        return sum(factors)  # type: ignore
+        return torch.from_numpy(self.predict(model, exprs)).to(self.data.device)
 
     def calc_single_IC_ret(self, expr: Expression) -> float:
         value = self._calc_alpha(expr)
@@ -55,17 +58,34 @@ class QLibStockDataCalculator(AlphaCalculator):
         value1, value2 = self._calc_alpha(expr1), self._calc_alpha(expr2)
         return self._calc_IC(value1, value2)
 
-    def calc_pool_IC_ret(self, exprs: List[Expression], weights: List[float]) -> float:
+    def calc_pool_IC_ret(self, exprs: List[Expression], model: LGBMRegressor) -> float:
         with torch.no_grad():
-            ensemble_value = self.make_ensemble_alpha(exprs, weights)
+            ensemble_value = self.make_ensemble_alpha(exprs, model)
             return self._calc_IC(ensemble_value, self.target_value)
 
-    def calc_pool_rIC_ret(self, exprs: List[Expression], weights: List[float]) -> float:
+    def calc_pool_rIC_ret(self, exprs: List[Expression], model: LGBMRegressor) -> float:
         with torch.no_grad():
-            ensemble_value = self.make_ensemble_alpha(exprs, weights)
+            ensemble_value = self.make_ensemble_alpha(exprs, model)
             return self._calc_rIC(ensemble_value, self.target_value)
 
-    def calc_pool_all_ret(self, exprs: List[Expression], weights: List[float]) -> Tuple[float, float]:
+    def calc_pool_all_ret(self, exprs: List[Expression], model: LGBMRegressor) -> Tuple[float, float]:
         with torch.no_grad():
-            ensemble_value = self.make_ensemble_alpha(exprs, weights)
+            ensemble_value = self.make_ensemble_alpha(exprs, model)
             return self._calc_IC(ensemble_value, self.target_value), self._calc_rIC(ensemble_value, self.target_value)
+
+    def predict(self, model: LGBMRegressor, exprs: List[Expression]) -> np.ndarray:
+        X = torch.stack([self._calc_alpha(expr) for expr in exprs], dim=-1).cpu().numpy()
+        X = X.reshape(-1, X.shape[-1])
+        val = model.predict(X)
+        return self.unstack(val)
+
+    def train_lgbm(self, exprs: List[Expression]) -> LGBMRegressor:
+        model = LGBMRegressor()
+        X = torch.stack([self._calc_alpha(expr) for expr in exprs], dim=-1).cpu().numpy()
+        X = X.reshape(-1, X.shape[-1])
+        y = column_or_1d(self.target_value.cpu().numpy().reshape(-1, 1))
+        model.fit(X, y)
+        return model
+
+    def unstack(self, value: np.ndarray) -> np.ndarray:
+        return value.reshape(self.data.n_days, self.data.n_stocks)

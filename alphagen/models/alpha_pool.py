@@ -5,6 +5,7 @@ from abc import ABCMeta, abstractmethod
 
 import numpy as np
 import torch
+from lightgbm import LGBMRegressor
 from torch import Tensor
 from alphagen.data.calculator import AlphaCalculator
 
@@ -49,8 +50,8 @@ class AlphaPool(AlphaPoolBase):
         self.size: int = 0
         self.exprs: List[Optional[Expression]] = [None for _ in range(capacity + 1)]
         self.single_ics: np.ndarray = np.zeros(capacity + 1)
-        self.mutual_ics: np.ndarray = np.identity(capacity + 1)
-        self.weights: np.ndarray = np.zeros(capacity + 1)
+        # self.mutual_ics: np.ndarray = np.identity(capacity + 1)
+        self.model: LGBMRegressor = LGBMRegressor()
         self.best_ic_ret: float = -1.
 
         self.ic_lower_bound = ic_lower_bound or -1.
@@ -63,96 +64,53 @@ class AlphaPool(AlphaPoolBase):
         return {
             "exprs": list(self.exprs[:self.size]),
             "ics_ret": list(self.single_ics[:self.size]),
-            "weights": list(self.weights[:self.size]),
+            "feature_importances": list(self.model.feature_importances_),
             "best_ic_ret": self.best_ic_ret
         }
 
     def to_dict(self) -> dict:
+        feature_importances = self.model.feature_importances_.tolist() if self.size > 0 else []
         return {
             "exprs": [str(expr) for expr in self.exprs[:self.size]],
-            "weights": list(self.weights[:self.size])
+            "feature_importances": feature_importances,
         }
 
     def try_new_expr(self, expr: Expression) -> float:
         ic_ret, ic_mut = self._calc_ics(expr, ic_mut_threshold=0.99)
-        if ic_ret is None or ic_mut is None or np.isnan(ic_ret) or np.isnan(ic_mut).any():
+        if ic_ret is None or np.isnan(ic_ret):
             return 0.
 
-        self._add_factor(expr, ic_ret, ic_mut)
+        self._add_factor(expr, ic_ret)
+        self.train_lgbm()
         if self.size > 1:
-            new_weights = self._optimize(alpha=self.l1_alpha, lr=5e-4, n_iter=500)
-            worst_idx = np.argmin(np.abs(new_weights))
-            if worst_idx != self.capacity:
-                self.weights[:self.size] = new_weights
             self._pop()
+            self.model = self.train_lgbm()
 
         new_ic_ret = self.evaluate_ensemble()
-        ### todo
-        increment = np.exp((new_ic_ret - self.best_ic_ret) * 10) -1
+        increment = new_ic_ret - self.best_ic_ret
         if increment > 0:
             self.best_ic_ret = new_ic_ret
         self.eval_cnt += 1
         return new_ic_ret
 
+    def train_lgbm(self) -> LGBMRegressor:
+        self.model = self.calculator.train_lgbm(self.exprs[:self.size])
+        return self.model
+
     def force_load_exprs(self, exprs: List[Expression]) -> None:
         for expr in exprs:
             ic_ret, ic_mut = self._calc_ics(expr, ic_mut_threshold=None)
             assert ic_ret is not None and ic_mut is not None
-            self._add_factor(expr, ic_ret, ic_mut)
+            self._add_factor(expr, ic_ret)
             assert self.size <= self.capacity
         self._optimize(alpha=self.l1_alpha, lr=5e-4, n_iter=500)
 
-    def _optimize(self, alpha: float, lr: float, n_iter: int) -> np.ndarray:
-        if math.isclose(alpha, 0.): # no L1 regularization
-            return self._optimize_lstsq() # very fast
-
-        ics_ret = torch.from_numpy(self.single_ics[:self.size]).to(self.device)
-        ics_mut = torch.from_numpy(self.mutual_ics[:self.size, :self.size]).to(self.device)
-        weights = torch.from_numpy(self.weights[:self.size]).to(self.device).requires_grad_()
-        optim = torch.optim.Adam([weights], lr=lr)
-
-        loss_ic_min = 1e9 + 7  # An arbitrary big value
-        best_weights = weights.cpu().detach().numpy()
-        iter_cnt = 0
-        for it in count():
-            ret_ic_sum = (weights * ics_ret).sum()
-            mut_ic_sum = (torch.outer(weights, weights) * ics_mut).sum()
-            loss_ic = mut_ic_sum - 2 * ret_ic_sum + 1
-            loss_ic_curr = loss_ic.item()
-
-            loss_l1 = torch.norm(weights, p=1)  # type: ignore
-            loss = loss_ic + alpha * loss_l1
-
-            optim.zero_grad()
-            loss.backward()
-            optim.step()
-
-            if loss_ic_min - loss_ic_curr > 1e-6:
-                iter_cnt = 0
-            else:
-                iter_cnt += 1
-
-            if loss_ic_curr < loss_ic_min:
-                best_weights = weights.cpu().detach().numpy()
-                loss_ic_min = loss_ic_curr
-
-            if iter_cnt >= n_iter or it >= 10000:
-                break
-
-        return best_weights
-
-    def _optimize_lstsq(self) -> np.ndarray:
-        try:
-            return np.linalg.lstsq(self.mutual_ics[:self.size, :self.size],self.single_ics[:self.size])[0]
-        except (np.linalg.LinAlgError, ValueError):
-            return self.weights[:self.size]
-
     def test_ensemble(self, calculator: AlphaCalculator) -> Tuple[float, float]:
-        ic, rank_ic = calculator.calc_pool_all_ret(self.exprs[:self.size], self.weights[:self.size])
+        ic, rank_ic = calculator.calc_pool_all_ret(self.exprs[:self.size], self.model)
         return ic, rank_ic
 
     def evaluate_ensemble(self) -> float:
-        ic = self.calculator.calc_pool_IC_ret(self.exprs[:self.size], self.weights[:self.size])
+        ic = self.calculator.calc_pool_IC_ret(self.exprs[:self.size], self.model)
         return ic
 
     @property
@@ -183,22 +141,18 @@ class AlphaPool(AlphaPoolBase):
         self,
         expr: Expression,
         ic_ret: float,
-        ic_mut: List[float]
     ):
         if self._under_thres_alpha and self.size == 1:
             self._pop()
         n = self.size
         self.exprs[n] = expr
         self.single_ics[n] = ic_ret
-        for i in range(n):
-            self.mutual_ics[i][n] = self.mutual_ics[n][i] = ic_mut[i]
-        self.weights[n] = ic_ret  # An arbitrary init value
         self.size += 1
 
     def _pop(self) -> None:
         if self.size <= self.capacity:
             return
-        idx = np.argmin(np.abs(self.weights))
+        idx = np.argmin(np.abs(self.model.feature_importances_))
         self._swap_idx(idx, self.capacity)
         self.size = self.capacity
 
@@ -207,6 +161,3 @@ class AlphaPool(AlphaPoolBase):
             return
         self.exprs[i], self.exprs[j] = self.exprs[j], self.exprs[i]
         self.single_ics[i], self.single_ics[j] = self.single_ics[j], self.single_ics[i]
-        self.mutual_ics[:, [i, j]] = self.mutual_ics[:, [j, i]]
-        self.mutual_ics[[i, j], :] = self.mutual_ics[[j, i], :]
-        self.weights[i], self.weights[j] = self.weights[j], self.weights[i]

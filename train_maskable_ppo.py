@@ -52,7 +52,6 @@ class CustomCallback(BaseCallback):
     def _on_rollout_end(self) -> None:
         assert self.logger is not None
         self.logger.record('pool/size', self.pool.size)
-        self.logger.record('pool/significant', (np.abs(self.pool.weights[:self.pool.size]) > 1e-4).sum())
         self.logger.record('pool/best_ic_ret', self.pool.best_ic_ret)
         self.logger.record('pool/eval_cnt', self.pool.eval_cnt)
         ic_test, rank_ic_test = self.pool.test_ensemble(self.test_calculator)

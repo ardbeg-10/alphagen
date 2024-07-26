@@ -2,7 +2,7 @@ from abc import ABCMeta, abstractmethod
 from typing import List, Tuple
 
 from alphagen.data.expression import Expression
-
+from lightgbm import LGBMRegressor
 
 class AlphaCalculator(metaclass=ABCMeta):
     @abstractmethod
@@ -22,16 +22,21 @@ class AlphaCalculator(metaclass=ABCMeta):
         'Calculate IC between two alphas.'
 
     @abstractmethod
-    def calc_pool_IC_ret(self, exprs: List[Expression], weights: List[float]) -> float:
+    def calc_pool_IC_ret(self, exprs: List[Expression], model: LGBMRegressor) -> float:
         'First combine the alphas linearly,'
         'then Calculate IC between the linear combination and a predefined target.'
 
     @abstractmethod
-    def calc_pool_rIC_ret(self, exprs: List[Expression], weights: List[float]) -> float:
+    def calc_pool_rIC_ret(self, exprs: List[Expression], model: LGBMRegressor) -> float:
         'First combine the alphas linearly,'
         'then Calculate Rank IC between the linear combination and a predefined target.'
 
     @abstractmethod
-    def calc_pool_all_ret(self, exprs: List[Expression], weights: List[float]) -> Tuple[float, float]:
+    def calc_pool_all_ret(self, exprs: List[Expression], model: LGBMRegressor) -> Tuple[float, float]:
         'First combine the alphas linearly,'
         'then Calculate both IC and Rank IC between the linear combination and a predefined target.'
+
+    @abstractmethod
+    def train_lgbm(self, exprs: List[Expression]) -> LGBMRegressor:
+        'Train a LightGBM model with the given parameters.'
+        'Return the trained model.'
