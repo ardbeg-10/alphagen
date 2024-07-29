@@ -54,9 +54,10 @@ class CustomCallback(BaseCallback):
         self.logger.record('pool/size', self.pool.size)
         self.logger.record('pool/best_ic_ret', self.pool.best_ic_ret)
         self.logger.record('pool/eval_cnt', self.pool.eval_cnt)
-        ic_test, rank_ic_test = self.pool.test_ensemble(self.test_calculator)
+        ic_test, rank_ic_test, ir = self.pool.test_ensemble(self.test_calculator)
         self.logger.record('test/ic', ic_test)
         self.logger.record('test/rank_ic', rank_ic_test)
+        self.logger.record('test/ic_ir', ir)
         self.save_checkpoint()
 
     def save_checkpoint(self):
@@ -66,6 +67,7 @@ class CustomCallback(BaseCallback):
             print(f'Saving model checkpoint to {path}')
         with open(f'{path}_pool.json', 'w') as f:
             json.dump(self.pool.to_dict(), f)
+        self.pool.get_dt_model().booster_.save_model(f'{path}_dt.txt')
 
     def show_pool_state(self):
         state = self.pool.state
@@ -102,14 +104,14 @@ def main(
 
     # You can re-implement AlphaCalculator instead of using QLibStockDataCalculator.
     data_train = StockData(instrument=instruments,
-                           start_time='2011-01-01',
-                           end_time='2019-12-31')
+                           start_time='2022-01-01',
+                           end_time='2023-05-31')
     data_valid = StockData(instrument=instruments,
-                           start_time='2020-01-01',
-                           end_time='2020-12-31')
+                           start_time='2023-06-01',
+                           end_time='2023-12-31')
     data_test = StockData(instrument=instruments,
-                          start_time='2021-01-01',
-                          end_time='2022-12-31')
+                          start_time='2023-01-01',
+                          end_time='2023-06-01')
     calculator_train = QLibStockDataCalculator(data_train, target)
     calculator_valid = QLibStockDataCalculator(data_valid, target)
     calculator_test = QLibStockDataCalculator(data_test, target)

@@ -33,7 +33,10 @@ class AlphaPoolBase(metaclass=ABCMeta):
     def try_new_expr(self, expr: Expression) -> float: ...
 
     @abstractmethod
-    def test_ensemble(self, calculator: AlphaCalculator) -> Tuple[float, float]: ...
+    def test_ensemble(self, calculator: AlphaCalculator) -> Tuple[float, float, float]: ...
+
+    @abstractmethod
+    def get_dt_model(self) -> LGBMRegressor: ...
 
 
 class AlphaPool(AlphaPoolBase):
@@ -51,7 +54,7 @@ class AlphaPool(AlphaPoolBase):
         self.exprs: List[Optional[Expression]] = [None for _ in range(capacity + 1)]
         self.single_ics: np.ndarray = np.zeros(capacity + 1)
         # self.mutual_ics: np.ndarray = np.identity(capacity + 1)
-        self.model: LGBMRegressor = LGBMRegressor()
+        self.model: LGBMRegressor = None  # type: ignore
         self.best_ic_ret: float = -1.
 
         self.ic_lower_bound = ic_lower_bound or -1.
@@ -74,6 +77,9 @@ class AlphaPool(AlphaPoolBase):
             "exprs": [str(expr) for expr in self.exprs[:self.size]],
             "feature_importances": feature_importances,
         }
+
+    def get_dt_model(self) -> LGBMRegressor:
+        return self.model
 
     def try_new_expr(self, expr: Expression) -> float:
         ic_ret, ic_mut = self._calc_ics(expr, ic_mut_threshold=0.99)
@@ -105,9 +111,9 @@ class AlphaPool(AlphaPoolBase):
             assert self.size <= self.capacity
         self._optimize(alpha=self.l1_alpha, lr=5e-4, n_iter=500)
 
-    def test_ensemble(self, calculator: AlphaCalculator) -> Tuple[float, float]:
-        ic, rank_ic = calculator.calc_pool_all_ret(self.exprs[:self.size], self.model)
-        return ic, rank_ic
+    def test_ensemble(self, calculator: AlphaCalculator) -> Tuple[float, float, float]:
+        ic, rank_ic, ir = calculator.calc_pool_all_ret(self.exprs[:self.size], self.model)
+        return ic, rank_ic, ir
 
     def evaluate_ensemble(self) -> float:
         ic = self.calculator.calc_pool_IC_ret(self.exprs[:self.size], self.model)

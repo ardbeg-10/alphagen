@@ -1,6 +1,8 @@
 from abc import ABCMeta, abstractmethod
 from typing import List, Tuple
 
+from torch import Tensor
+
 from alphagen.data.expression import Expression
 from lightgbm import LGBMRegressor
 
@@ -32,9 +34,9 @@ class AlphaCalculator(metaclass=ABCMeta):
         'then Calculate Rank IC between the linear combination and a predefined target.'
 
     @abstractmethod
-    def calc_pool_all_ret(self, exprs: List[Expression], model: LGBMRegressor) -> Tuple[float, float]:
+    def calc_pool_all_ret(self, exprs: List[Expression], model: LGBMRegressor) -> Tuple[float, float, float]:
         'First combine the alphas linearly,'
-        'then Calculate both IC and Rank IC between the linear combination and a predefined target.'
+        'then Calculate both IC, Rank IC, and ICIR between the linear combination and a predefined target.'
 
     @abstractmethod
     def train_lgbm(self, exprs: List[Expression]) -> LGBMRegressor:
