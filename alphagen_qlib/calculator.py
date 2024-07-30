@@ -96,7 +96,7 @@ class QLibStockDataCalculator(AlphaCalculator):
     def predict(self, model: LGBMRegressor, exprs: List[Expression]) -> np.ndarray:
         X = torch.stack([self._calc_alpha(expr) for expr in exprs], dim=-1).cpu().numpy()
         X = X.reshape(-1, X.shape[-1])
-        val = model.predict(X)
+        val = model.booster_.predict(X)
         return self.unstack(val)
 
     def train_lgbm(self, exprs: List[Expression]) -> LGBMRegressor:

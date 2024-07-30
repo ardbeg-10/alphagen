@@ -1,6 +1,10 @@
 import datetime
 import json
 from typing import List, Tuple
+
+import lightgbm
+from lightgbm import LGBMRegressor, Booster
+
 from alphagen.data.expression import *
 from alphagen_generic.features import *
 
@@ -33,3 +37,6 @@ def load_alpha_pool_by_path(path: str) -> Tuple[List[Expression], List[float]]:
     with open(path, encoding='utf-8') as f:
         raw = json.load(f)
         return load_alpha_pool(raw)
+
+def load_dt_model_by_path(path: str) -> Booster:
+    return lightgbm.Booster(model_file=str) # type: ignore
