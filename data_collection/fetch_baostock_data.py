@@ -247,8 +247,8 @@ class DataManager:
 
     def fetch_and_save_data(
         self,
-        use_cached_basic_info: bool = False,
-        use_cached_adjust_factor: bool = False
+        use_cached_basic_info: bool = True,
+        use_cached_adjust_factor: bool = True
     ):
         self._load_all_a_shares()
         if use_cached_basic_info:
@@ -259,8 +259,8 @@ class DataManager:
             self._adjust_factors = pd.read_csv(f"{self._save_path}/adjust_factors.csv", index_col=[0, 1])
         else:
             self._adjust_factors = self._fetch_adjust_factors()
-        self._download_stock_data()
-        self._save_csv()
+        # self._download_stock_data()
+        # self._save_csv()
         self._dump_qlib_data()
 
 

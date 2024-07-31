@@ -104,7 +104,8 @@ def main(
 
     # You can re-implement AlphaCalculator instead of using QLibStockDataCalculator.
     data_train = StockData(instrument=instruments,
-                           start_time='2022-04-01',
+                           start_time='2022'
+                                      '-04-01',
                            end_time='2023-12-31')
     data_valid = StockData(instrument=instruments,
                            start_time='2024-01-01',

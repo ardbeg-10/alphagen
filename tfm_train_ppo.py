@@ -100,7 +100,7 @@ def main(
 
     device = torch.device('cuda:0')
     close = Feature(FeatureType.CLOSE)
-    target = Ref(close, -20) / close - 1
+    target = Ref(close, -1) / close - 1
 
     # You can re-implement AlphaCalculator instead of using QLibStockDataCalculator.
     data_train = StockData(instrument=instruments,
