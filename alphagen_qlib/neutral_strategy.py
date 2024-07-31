@@ -10,17 +10,16 @@ from alphagen.trade.base import StockCode, StockPosition, StockSignal, StockStat
 from alphagen.trade.strategy import Strategy
 
 
-class TopKSwapNStrategy(BaseSignalStrategy, Strategy):
+class MarketNeutralStrategy(BaseSignalStrategy, Strategy):
     def __init__(
         self,
-        K, n_swap,
+        K,
         min_hold_days=1,
         only_tradable=False,
         **kwargs,
     ):
         super().__init__(**kwargs)
         self.K = K
-        self.n_swap = n_swap
         self.min_hold_days = min_hold_days
         self.only_tradable = only_tradable
 
@@ -54,24 +53,21 @@ class TopKSwapNStrategy(BaseSignalStrategy, Strategy):
                 continue
             holding_priority.append(stock_id)
 
-        for stock_id in sorted(not_holding_stocks, key=signal.get, reverse=True):
+        # 中性策略：选择信号最强的股票做多，信号最弱的股票做空
+        long_stocks = sorted(not_holding_stocks, key=signal.get, reverse=True)[:self.K]
+        short_stocks = sorted(not_holding_stocks, key=signal.get, reverse=False)[:self.K]
+
+        for stock_id in long_stocks:
             if stock_id in unbuyable:
                 continue
+            to_buy.append(stock_id)
 
-            can_swap = len(to_buy) <= self.n_swap and holding_priority and signal[stock_id] > signal[holding_priority[-1]]
-            print(f"len(to_buy): {len(to_buy)}, self.n_swap: {self.n_swap}")
-            print(holding_priority and signal[stock_id] > signal[holding_priority[-1]])
-            print(can_swap)
-            if can_swap:
-                to_sell.append(holding_priority.pop())
-                to_buy.append(stock_id)
-            elif len(to_open) < n_to_open and signal[stock_id] >= 0.8:
-                to_open.append(stock_id)
-            else:
-                break
-        print(f"selling {to_sell}")
-        print(f"buying {to_buy + to_open}")
-        return to_buy + to_open, to_sell
+        for stock_id in short_stocks:
+            if stock_id in unsellable:
+                continue
+            to_sell.append(stock_id)
+
+        return to_buy, to_sell
 
     def generate_trade_decision(self, execute_result=None):
         trade_step = self.trade_calendar.get_trade_step()
@@ -156,3 +152,4 @@ class TopKSwapNStrategy(BaseSignalStrategy, Strategy):
             buy_orders.append(buy_order)
 
         return TradeDecisionWO(sell_orders + buy_orders, self)
+

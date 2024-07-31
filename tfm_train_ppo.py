@@ -52,12 +52,12 @@ class CustomCallback(BaseCallback):
     def _on_rollout_end(self) -> None:
         assert self.logger is not None
         self.logger.record('pool/size', self.pool.size)
-        self.logger.record('pool/significant', (np.abs(self.pool.weights[:self.pool.size]) > 1e-4).sum())
         self.logger.record('pool/best_ic_ret', self.pool.best_ic_ret)
         self.logger.record('pool/eval_cnt', self.pool.eval_cnt)
-        ic_test, rank_ic_test = self.pool.test_ensemble(self.test_calculator)
+        ic_test, rank_ic_test, ir = self.pool.test_ensemble(self.test_calculator)
         self.logger.record('test/ic', ic_test)
         self.logger.record('test/rank_ic', rank_ic_test)
+        self.logger.record('test/ic_ir', ir)
         self.save_checkpoint()
 
     def save_checkpoint(self):
@@ -67,6 +67,7 @@ class CustomCallback(BaseCallback):
             print(f'Saving model checkpoint to {path}')
         with open(f'{path}_pool.json', 'w') as f:
             json.dump(self.pool.to_dict(), f)
+        self.pool.get_dt_model().booster_.save_model(f'{path}_dt.txt')
 
     def show_pool_state(self):
         state = self.pool.state
@@ -103,14 +104,14 @@ def main(
 
     # You can re-implement AlphaCalculator instead of using QLibStockDataCalculator.
     data_train = StockData(instrument=instruments,
-                           start_time='2011-01-01',
-                           end_time='2019-12-31')
+                           start_time='2022-04-01',
+                           end_time='2023-12-31')
     data_valid = StockData(instrument=instruments,
-                           start_time='2020-01-01',
-                           end_time='2020-12-31')
+                           start_time='2024-01-01',
+                           end_time='2024-03-31')
     data_test = StockData(instrument=instruments,
-                          start_time='2021-01-01',
-                          end_time='2022-12-31')
+                          start_time='2024-04-01',
+                          end_time='2024-06-01')
     calculator_train = QLibStockDataCalculator(data_train, target)
     calculator_valid = QLibStockDataCalculator(data_valid, target)
     calculator_test = QLibStockDataCalculator(data_test, target)
@@ -118,7 +119,7 @@ def main(
     pool = AlphaPool(
         capacity=pool_capacity,
         calculator=calculator_train,
-        ic_lower_bound=None,
+        ic_lower_bound=0.5,
         l1_alpha=5e-3
     )
     env = AlphaEnv(pool=pool, device=device, print_expr=True)
@@ -143,17 +144,18 @@ def main(
         policy_kwargs=dict(
             features_extractor_class=TransformerSharedNet,
             features_extractor_kwargs=dict(
-                n_encoder_layers=8,
-                d_model=256,
-                n_head=8,
-                d_ffn=512,
+                n_encoder_layers=6,
+                d_model=128,
+                n_head=4,
+                d_ffn=2048,
                 dropout=0.1,
                 device=device,
             ),
         ),
         gamma=1.,
-        ent_coef=0.01,
-        batch_size=128,
+        ent_coef=0.015,
+        batch_size=256,
+        learning_rate=0.001,
         tensorboard_log='/tensorboard',
         device=device,
         verbose=1,

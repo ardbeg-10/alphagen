@@ -119,13 +119,6 @@ class QLibStockDataCalculator(AlphaCalculator):
 
         print("\n\n")
 
-        df_X = pd.DataFrame(X)
-        df_y = pd.DataFrame(y)
-        print(df_X.describe())
-        print(df_y.describe())
-
-        print("\n\n")
-
         kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)
 
         best_model = None

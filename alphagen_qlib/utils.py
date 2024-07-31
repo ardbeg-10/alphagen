@@ -29,7 +29,7 @@ def load_recent_data(instrument: str,
 def load_alpha_pool(raw) -> Tuple[List[Expression], List[float]]:
     exprs_raw = raw['exprs']
     exprs = [eval(expr_raw.replace('$open', 'open_').replace('$', '')) for expr_raw in exprs_raw]
-    weights = raw['weights']
+    weights = None
     return exprs, weights
 
 
@@ -39,4 +39,4 @@ def load_alpha_pool_by_path(path: str) -> Tuple[List[Expression], List[float]]:
         return load_alpha_pool(raw)
 
 def load_dt_model_by_path(path: str) -> Booster:
-    return lightgbm.Booster(model_file=str) # type: ignore
+    return lightgbm.Booster(model_file=path) # type: ignore
