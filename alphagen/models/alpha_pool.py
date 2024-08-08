@@ -116,7 +116,7 @@ class AlphaPool(AlphaPoolBase):
         return ic, rank_ic, ir
 
     def evaluate_ensemble(self) -> float:
-        ic = self.calculator.calc_pool_IC_ret(self.exprs[:self.size], self.model)
+        ic = self.calculator.calc_pool_IR_ret(self.exprs[:self.size], self.model)
         return ic
 
     @property

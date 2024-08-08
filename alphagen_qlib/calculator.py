@@ -83,6 +83,16 @@ class QLibStockDataCalculator(AlphaCalculator):
             print(model.feature_importances_)
             return val
 
+    def calc_pool_IR_ret(self, exprs: List[Expression], model: LGBMRegressor) -> float:
+        with torch.no_grad():
+            ensemble_value = self.make_ensemble_alpha(exprs, model)
+            val = self._calc_IC(ensemble_value, self.target_value)
+            ir = self._calc_IR(ensemble_value, self.target_value)
+            print(f"Combined IC: {val}")
+            print(f"Combined IR: {ir}")
+            print(model.feature_importances_)
+            return ir
+
     def calc_pool_rIC_ret(self, exprs: List[Expression], model: LGBMRegressor) -> float:
         with torch.no_grad():
             ensemble_value = self.make_ensemble_alpha(exprs, model)
@@ -100,86 +110,42 @@ class QLibStockDataCalculator(AlphaCalculator):
         return self.unstack(val)
 
     def train_lgbm(self, exprs: List[Expression]) -> LGBMRegressor:
-        n_splits = 2
         X = torch.stack([self._calc_alpha(expr) for expr in exprs], dim=-1).cpu().numpy()
         X = X.reshape(-1, X.shape[-1])
         y = column_or_1d(self.target_value.cpu().numpy().reshape(-1, 1))
 
         threshold = 3
-
-        # z_scores = np.abs(stats.zscore(X))
-        # # 设置阈值
-        #
-        #
-        # # 将超过阈值的值设为阈值
-        # X = np.where(z_scores > threshold, np.sign(X) * threshold, X)
-
         X = np.where(X > threshold, threshold, X)
         X = np.where(X < -threshold, -threshold, X)
 
-        print("\n\n")
+        model = LGBMRegressor(
+            boosting_type='dart',
+            metric="huber",
+            num_iterations=20,
+            learning_rate=0.3,
+            num_leaves=31,
+            max_depth=6,
+            reg_alpha=0.005,
+            subsample_freq=4,
+            subsample=0.9,
+            feature_fraction=0.45,
+            min_child_samples=1000,
+            drop_rate=0.45,
+            max_drop=30,
+            skip_drop=0.65,
+            max_bin=65,
+            extra_trees=True
+        )
 
-        kf = KFold(n_splits=n_splits, shuffle=True, random_state=42)
+        model.fit(X, y, eval_metric='l1')
 
-        best_model = None
-        best_score = float('inf')
+        # Calculate training error
+        y_train_pred = model.predict(X)
+        train_rmse = mean_squared_error(y, y_train_pred, squared=False)
 
-        for train_index, valid_index in kf.split(X):
-            X_train, X_valid = X[train_index], X[valid_index]
-            y_train, y_valid = y[train_index], y[valid_index]
+        print(f'Train RMSE: {train_rmse} \n\n')
 
-            model = LGBMRegressor(
-                boosting_type='gbdt',
-                num_leaves=31,
-                learning_rate=0.02,
-                n_estimators=500,
-                max_depth=8,
-                reg_alpha=0.1,
-                reg_lambda=0.1,
-                min_split_gain=0.005,
-                subsample_freq=5,
-                colsample_bytree=0.8879,
-                subsample=0.8789,
-                min_child_samples=20
-            )
-
-            model.fit(
-                X_train,
-                y_train,
-                eval_set=[(X_valid, y_valid)],
-                eval_metric='l1',
-            )
-
-            score = model.best_score_['valid_0']['l1']
-            # 计算训练误差
-            y_train_pred = model.predict(X_train)
-            train_rmse = mean_squared_error(y_train, y_train_pred, squared=False)
-
-            # 计算测试误差
-            y_test_pred = model.predict(X_valid)
-            test_rmse = mean_squared_error(y_valid, y_test_pred, squared=False)
-
-            print('\n')
-            print('\n')
-            print(f'Train RMSE: {train_rmse}')
-            print(f'Test RMSE: {test_rmse}')
-            print('\n')
-            print('\n')
-
-            best_model = model
-
-            if score < best_score:
-                best_score = score
-                best_model = model
-
-        # model_dir = os.path.expanduser('~/models')
-        # if not os.path.exists(model_dir):
-        #     os.makedirs(model_dir)
-        #
-        # model_path = os.path.join(model_dir, 'model.txt')
-        # best_model.booster_.save_model(model_path)
-
-        return best_model
+        return model
 
     def unstack(self, value: np.ndarray) -> np.ndarray:
         return value.reshape(self.data.n_days, self.data.n_stocks)

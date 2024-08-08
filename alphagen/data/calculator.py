@@ -29,6 +29,11 @@ class AlphaCalculator(metaclass=ABCMeta):
         'then Calculate IC between the linear combination and a predefined target.'
 
     @abstractmethod
+    def calc_pool_IR_ret(self, exprs: List[Expression], model: LGBMRegressor) -> float:
+        'First combine the alphas linearly,'
+        'then Calculate ICIR between the linear combination and a predefined target.'
+
+    @abstractmethod
     def calc_pool_rIC_ret(self, exprs: List[Expression], model: LGBMRegressor) -> float:
         'First combine the alphas linearly,'
         'then Calculate Rank IC between the linear combination and a predefined target.'
