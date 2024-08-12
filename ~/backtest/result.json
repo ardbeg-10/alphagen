@@ -1,8 +1,8 @@
 {
-    "sharpe": -1.7823179544611116,
-    "annual_return": -0.7422821517657833,
-    "max_drawdown": -0.22967801402723728,
-    "information_ratio": -0.1479367581229124,
-    "annual_excess_return": -0.049659815820095855,
-    "excess_max_drawdown": -0.1648072632296378
+    "sharpe": -3.5371736836975005,
+    "annual_return": -0.9733318624304598,
+    "max_drawdown": -0.13988382466735383,
+    "information_ratio": -0.973179310799496,
+    "annual_excess_return": -0.19249639286665768,
+    "excess_max_drawdown": -0.07300544627608796
 }
